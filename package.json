@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "bun run build.ts",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "bun test"
   },
   "repository": {
     "type": "git",
@@ -33,5 +33,11 @@
   "bugs": {
     "url": "https://github.com/harihar-nautiyal/hx-router/issues"
   },
-  "homepage": "https://github.com/harihar-nautiyal/hx-router#readme"
+  "homepage": "https://github.com/harihar-nautiyal/hx-router#readme",
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "@types/jsdom": "^30.0.0",
+    "happy-dom": "^20.14.0",
+    "jsdom": "^30.0.1"
+  }
 }
