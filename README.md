@@ -103,6 +103,12 @@ Following the hypermedia and Unix philosophy of *"do one thing well"*, `hx-route
 
 ---
 
+## AI Agents & Skills
+
+This repository includes a [`SKILL.md`](./SKILL.md) specification designed for agentic coding assistants (e.g. OpenCode, Claude Code). It provides context on architecture, attribute mechanics, diagnostics, and integration patterns for building and troubleshooting SPA-style htmx apps.
+
+---
+
 ## License
 
 MIT
