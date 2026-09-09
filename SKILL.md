@@ -1,21 +1,21 @@
 ---
 name: hx-router
-description: Use when implementing, configuring, or debugging SPA routing, viewport outlets, active link state reflection, View Transitions, and scroll preservation using the hx-router extension in htmx applications.
+description: Use when implementing, configuring, or debugging SPA routing, viewport outlets, active link state reflection, View Transitions, scroll preservation, and fragment extraction using the hx-router extension in htmx applications.
 argument-hint: "[routing task or issue description]"
 ---
 
 # `hx-router` Extension Guide
 
-`hx-router` provides SPA routing, viewport outlet targeting, active link synchronization, View Transitions, and scroll restoration for htmx applications while preserving hypermedia-first architecture.
+`hx-router` provides SPA routing, viewport outlet targeting, active link synchronization, View Transitions, scroll restoration, screen-reader announcements, and full-page fragment extraction for htmx applications while preserving hypermedia-first architecture.
 
 ## Installation & Setup
 
-Include `hx-router.js` after `htmx.js`:
+Include `hx-router.js` (or import the ESM module) after `htmx.js`:
 
 ```html
 <head>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@4"></script>
-  <script src="/path/to/hx-router.js"></script>
+  <script src="/path/to/dist/hx-router.js"></script>
   <!-- Recommended: Pair with official preload extension for mouseover/mousedown prefetching -->
   <script src="https://cdn.jsdelivr.net/npm/htmx-ext-preload@2.1.2"></script>
 </head>
@@ -32,13 +32,8 @@ Include `hx-router.js` after `htmx.js`:
 Designates the primary swap container for SPA transitions.
 - Any navigation link (`a[href]` with `hx-boost="true"` or `hx-get`) omitting an explicit `hx-target` routes directly into `[hx-viewport]`.
 - Defaults to `innerMorph` swapping to eliminate layout flicker and preserve input state.
+- **Full-Page Fragment Extraction**: If the server returns a complete HTML page with `<head>`, `<nav>`, and `<main hx-viewport>`, `hx-router` automatically extracts the matching viewport content and keeps `document.title` synced without requiring separate partial endpoints.
 - **Safety**: Forms and mutating HTTP requests (`POST`, `PUT`, `DELETE`, `PATCH`) are never hijacked.
-
-```html
-<main hx-viewport>
-  <!-- Active page partial swaps here -->
-</main>
-```
 
 ### 2. Named Viewports (`hx-route-to="name"`)
 Routes specific links into secondary outlets (e.g., modals, slide-out drawers, detail panes):
@@ -57,61 +52,33 @@ Routes specific links into secondary outlets (e.g., modals, slide-out drawers, d
 Automatically synchronizes the active CSS class and `aria-current="page"` on route navigation, browser back/forward buttons, and initial load.
 
 - Put `hx-nav` on `<nav>` containers or `hx-route-link` on individual anchor elements.
-- Implements strict segment/slash boundary matching (`/users` will not erroneously match `/user`).
+- Strict segment/slash boundary matching.
+- **`hx-route-match="exact|prefix"`**: Force exact path matching or hierarchical prefix matching.
+- **`hx-active-class="classes..."`**: Customize active classes per link or per nav.
 - Exact matches receive `aria-current="page"`. Parent subpath matches receive the active class.
 
-```html
-<nav hx-nav>
-  <a href="/dashboard" hx-boost="true">Dashboard</a>
-  <a href="/projects" hx-boost="true">Projects</a>
-  <a href="/settings" hx-boost="true">Settings</a>
-</nav>
-```
-
 ### 4. Native View Transitions
-If supported by the browser (`document.startViewTransition`), `hx-router` automatically enables animated transitions on viewport swaps without manual CSS classes or configuration.
+If supported by the browser (`document.startViewTransition`) and reduced motion is not preferred (`prefers-reduced-motion`), `hx-router` automatically enables animated transitions on viewport swaps.
 
-Customize transition animations in CSS:
-```css
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.2s;
-}
-```
+### 5. Document Title Synchronization & a11y Announcer
+When `syncTitle: true` (default), `hx-router` parses `<title>` tags from server partials or pages, updates `document.title`, and updates an offscreen `aria-live="polite"` region for assistive technology.
 
-### 5. Document Title Synchronization
-When `syncTitle: true` (default), `hx-router` automatically parses `<title>` tags from server partials or pages and updates `document.title`.
+### 6. Scroll Management & Preservation
+- Automatically resets scroll to top on navigation when `scrollReset: true`.
+- Automatically jumps to anchor targets (`#heading`) when `scrollHash: true`.
+- Use `[hx-preserve-scroll]` to preserve `scrollTop` and `scrollLeft` for sub-containers (like sidebars).
 
-```html
-<!-- Response fragment from server -->
-<title>Projects - My App</title>
-<div class="projects-list">
-  ...
-</div>
-```
+### 7. Lifecycle Events
 
-### 6. Scroll Position Preservation (`[hx-preserve-scroll]`)
-Preserves `scrollTop` and `scrollLeft` for sub-containers across route swaps and browser history navigation:
+```javascript
+document.addEventListener('hx-router:navigating', (e) => {
+  // e.detail: { elt, viewport, to, from }
+  // Can call e.preventDefault() to cancel navigation
+});
 
-```html
-<aside hx-preserve-scroll="sidebar-nav">
-  <!-- Scroll offset retained on route navigation -->
-</aside>
-```
-
-### 7. Composing with `preload`
-`hx-router` intentionally leaves resource preloading to the official `preload` extension:
-
-```html
-<body hx-ext="hx-router, preload">
-  <!-- Active nav links managed by hx-router, hover prefetch managed by preload -->
-  <nav hx-nav preload="mouseover">
-    <a href="/dashboard" hx-boost="true">Dashboard</a>
-    <a href="/reports" hx-boost="true">Reports</a>
-  </nav>
-
-  <main hx-viewport></main>
-</body>
+document.addEventListener('hx-router:navigated', (e) => {
+  // e.detail: { elt, viewport, url, type }
+});
 ```
 
 ---
@@ -127,22 +94,10 @@ htmx.config.router = {
   morph: true,                   // Use innerMorph swap for viewports (default: true)
   viewTransitions: true,         // Enable document.startViewTransition (default: true)
   syncTitle: true,               // Extract and update document.title (default: true)
-  routingClass: 'hx-routing'     // Class added to viewport during navigation
+  routingClass: 'hx-routing',    // Class added to viewport during navigation
+  scrollReset: true,             // Reset window/viewport scroll to top on navigation
+  scrollHash: true,              // Scroll to #hash element if present
+  announceTitle: true,           // Screen reader aria-live announcements on route change
+  autoExtractFragment: true      // Extract [hx-viewport] if server sends full HTML
 };
 ```
-
----
-
-## Agent Troubleshooting & Checklist
-
-1. **Link not swapping into viewport?**
-   - Ensure the link is either boosted (`hx-boost="true"`) or has `hx-get`.
-   - Ensure there is an element with `hx-viewport` in the DOM.
-   - Verify there is no explicit `hx-target` overriding the viewport.
-
-2. **Active link class not appearing?**
-   - Ensure the `<nav>` has `hx-nav` (or `hx-nav:inherited` in htmx 4), or the anchor has `hx-route-link`.
-   - Verify the anchor's `href` matches the window `pathname`.
-
-3. **Form submission replacing the whole viewport?**
-   - Forms and mutating requests (`POST`, `PUT`, `DELETE`) are intentionally ignored by `hx-router`. Ensure form target behavior is specified via explicit `hx-target` on the form or submit button.

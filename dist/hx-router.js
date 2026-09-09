@@ -16,7 +16,11 @@
             morph: true,
             viewTransitions: true,
             syncTitle: true,
-            routingClass: 'hx-routing'
+            routingClass: 'hx-routing',
+            scrollReset: true,
+            scrollHash: true,
+            announceTitle: true,
+            autoExtractFragment: true
         }, (window.htmx && window.htmx.config && window.htmx.config.router) || {});
     }
 
@@ -41,17 +45,31 @@
         }
     }
 
-    function isRouteMatch(linkPath, currentPath) {
+    function isRouteMatch(linkPath, currentPath, mode) {
         if (!linkPath || !currentPath) return false;
         if (linkPath === currentPath) return true;
+        if (mode === 'exact') return false;
 
-        // Path hierarchy matching without query parameters
+        // Path hierarchy matching
         const linkBase = linkPath.split('?')[0];
         const currentBase = currentPath.split('?')[0];
 
         if (linkBase === '/' || linkBase === '') return false;
 
-        if (linkBase === currentBase) return true;
+        if (linkBase === currentBase) {
+            // If link specifies query parameters, verify they match
+            if (linkPath.includes('?')) {
+                const linkUrl = new URL(linkPath, 'https://hx-router.local');
+                const currUrl = new URL(currentPath, 'https://hx-router.local');
+                let matches = true;
+                linkUrl.searchParams.forEach((v, k) => {
+                    if (currUrl.searchParams.get(k) !== v) matches = false;
+                });
+                return matches;
+            }
+            return true;
+        }
+
         if (currentBase.startsWith(linkBase.endsWith('/') ? linkBase : linkBase + '/')) {
             return true;
         }
@@ -77,18 +95,21 @@
             const norm = normalizeUrl(href);
             if (!norm) return;
 
+            const mode = getAttr(a, 'hx-route-match') || (a.closest('[hx-nav]') ? getAttr(a.closest('[hx-nav]'), 'hx-route-match') : null) || 'prefix';
+            const activeCls = getAttr(a, 'hx-active-class') || cfg.activeClass;
+
             const isExact = norm === currentNorm;
-            const isMatch = isRouteMatch(norm, currentNorm);
+            const isMatch = isRouteMatch(norm, currentNorm, mode);
 
             if (isMatch) {
-                a.classList.add(cfg.activeClass);
+                if (activeCls) a.classList.add(...activeCls.trim().split(/\s+/));
                 if (isExact) {
                     a.setAttribute('aria-current', cfg.ariaCurrent);
                 } else {
                     a.removeAttribute('aria-current');
                 }
             } else {
-                a.classList.remove(cfg.activeClass);
+                if (activeCls) a.classList.remove(...activeCls.trim().split(/\s+/));
                 a.removeAttribute('aria-current');
             }
         });
@@ -114,14 +135,59 @@
         });
     }
 
+    function getOrCreateAnnouncer() {
+        let el = document.getElementById('hx-router-announcer');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'hx-router-announcer';
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            el.setAttribute('aria-atomic', 'true');
+            el.style.cssText = 'position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;';
+            document.body.appendChild(el);
+        }
+        return el;
+    }
+
+    function getDOMParser() {
+        return (typeof window !== 'undefined' && window.DOMParser) || DOMParser;
+    }
+
     function syncDocumentMetadata(responseHtml) {
         if (!responseHtml || !getCfg().syncTitle) return;
         try {
-            const doc = new DOMParser().parseFromString(responseHtml, 'text/html');
+            const ParserClass = getDOMParser();
+            const doc = new ParserClass().parseFromString(responseHtml, 'text/html');
             if (doc.title) {
                 document.title = doc.title;
+                if (getCfg().announceTitle && document.body) {
+                    const announcer = getOrCreateAnnouncer();
+                    if (announcer) announcer.textContent = doc.title;
+                }
             }
         } catch (_) {}
+    }
+
+    function handleScrollResetAndHash(targetEl) {
+        const cfg = getCfg();
+        const hash = window.location.hash ? window.location.hash.slice(1) : null;
+
+        if (cfg.scrollHash && hash) {
+            const hashEl = document.getElementById(hash);
+            if (hashEl) {
+                hashEl.scrollIntoView();
+                return;
+            }
+        }
+
+        if (cfg.scrollReset) {
+            if (typeof window.scrollTo === 'function') {
+                window.scrollTo(0, 0);
+            }
+            if (targetEl && targetEl.scrollTop !== undefined) {
+                targetEl.scrollTop = 0;
+            }
+        }
     }
 
     function isRoutingCandidate(elt, ctx) {
@@ -153,12 +219,73 @@
         }
     }
 
+    function extractViewportFragment(responseHtml, viewportTarget) {
+        if (!responseHtml || typeof responseHtml !== 'string') return responseHtml;
+        // Check if response contains <html> or <body> tags
+        if (!/<html[\s>]/i.test(responseHtml) && !/<body[\s>]/i.test(responseHtml)) {
+            return responseHtml;
+        }
+
+        try {
+            const ParserClass = getDOMParser();
+            const parser = new ParserClass();
+            const doc = parser.parseFromString(responseHtml, 'text/html');
+            const targetName = viewportTarget && typeof viewportTarget.getAttribute === 'function' ? viewportTarget.getAttribute('hx-viewport') : null;
+            let matchingOutlet = null;
+
+            if (targetName) {
+                matchingOutlet = doc.querySelector(`[hx-viewport="${targetName}"]`);
+            }
+            if (!matchingOutlet) {
+                matchingOutlet = doc.querySelector('[hx-viewport]');
+            }
+
+            if (matchingOutlet) {
+                // If the target doc had a title, keep document.title synced
+                if (doc.title && getCfg().syncTitle) {
+                    document.title = doc.title;
+                    if (getCfg().announceTitle && document.body) {
+                        const announcer = getOrCreateAnnouncer();
+                        if (announcer) announcer.textContent = doc.title;
+                    }
+                }
+                return matchingOutlet.innerHTML;
+            }
+        } catch (_) {}
+
+        return responseHtml;
+    }
+
+    function prefersReducedMotion() {
+        try {
+            return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function dispatchRouterEvent(name, detail, cancelable = false) {
+        const CustomEventCtor = (typeof window !== 'undefined' && window.CustomEvent) || CustomEvent;
+        const evt = new CustomEventCtor(name, {
+            bubbles: true,
+            cancelable: cancelable,
+            detail: detail || {}
+        });
+        return document.dispatchEvent(evt);
+    }
+
     const routerExtension = {
         init: (internalAPI) => {
             api = internalAPI;
             window.addEventListener('popstate', () => {
                 updateActiveLinks();
-                setTimeout(restoreScrollContainers, 0);
+                setTimeout(() => {
+                    restoreScrollContainers();
+                    dispatchRouterEvent('hx-router:navigated', {
+                        type: 'popstate',
+                        url: window.location.href
+                    });
+                }, 0);
             });
         },
 
@@ -178,14 +305,29 @@
             if (!explicitTarget && isRoutingCandidate(elt, ctx)) {
                 const viewport = resolveViewportTarget(elt);
                 if (viewport) {
+                    const toUrl = elt.getAttribute('href') || elt.getAttribute('hx-get');
+                    const allow = dispatchRouterEvent('hx-router:navigating', {
+                        elt: elt,
+                        viewport: viewport,
+                        to: toUrl,
+                        from: window.location.href
+                    }, true);
+
+                    if (!allow) {
+                        if (ctx.xhr && typeof ctx.xhr.abort === 'function') ctx.xhr.abort();
+                        return;
+                    }
+
                     ctx.target = viewport;
+                    ctx._hxRouterActive = true;
+                    ctx._hxRouterViewport = viewport;
 
                     const explicitSwap = getAttr(elt, 'hx-swap');
                     if (!explicitSwap && cfg.morph) {
                         ctx.swapStyle = 'innerMorph';
                     }
 
-                    if (cfg.viewTransitions && document.startViewTransition && ctx.transition === undefined) {
+                    if (cfg.viewTransitions && document.startViewTransition && !prefersReducedMotion() && ctx.transition === undefined) {
                         ctx.transition = true;
                     }
 
@@ -196,21 +338,62 @@
             }
         },
 
+        htmx_before_swap: (elt, detail) => {
+            const ctx = detail ? (detail.ctx || detail) : null;
+            const cfg = getCfg();
+
+            // Support autoExtractFragment when swapping full pages into viewports
+            if (cfg.autoExtractFragment && ctx && (ctx._hxRouterActive || detail.target?.hasAttribute?.('hx-viewport') || ctx.target?.hasAttribute?.('hx-viewport'))) {
+                const vp = ctx._hxRouterViewport || ctx.target || detail.target;
+                const rawResponse = detail.xhr ? (detail.xhr.responseText || detail.xhr.response) : (detail.serverResponse || ctx.text);
+                if (typeof rawResponse === 'string') {
+                    const extracted = extractViewportFragment(rawResponse, vp);
+                    if (extracted !== rawResponse) {
+                        if (detail.serverResponse !== undefined) detail.serverResponse = extracted;
+                        if (ctx.text !== undefined) ctx.text = extracted;
+                    }
+                }
+            }
+        },
+
         htmx_after_request: (elt, detail) => {
             const ctx = detail ? (detail.ctx || detail) : null;
             if (!ctx) return;
 
+            const cfg = getCfg();
+
+            // Support autoExtractFragment for htmx 4 before swap parsing begins
+            if (cfg.autoExtractFragment && (ctx._hxRouterActive || ctx.target?.hasAttribute?.('hx-viewport'))) {
+                const vp = ctx._hxRouterViewport || ctx.target;
+                if (typeof ctx.text === 'string') {
+                    const extracted = extractViewportFragment(ctx.text, vp);
+                    if (extracted !== ctx.text) {
+                        ctx.text = extracted;
+                    }
+                }
+            }
+
             // Extract and synchronize document title from response
             const responseText = ctx.text || (ctx.xhr && (ctx.xhr.responseText || ctx.xhr.response));
-            if (responseText && getCfg().syncTitle) {
+            if (responseText && cfg.syncTitle) {
                 syncDocumentMetadata(responseText);
             }
         },
 
         htmx_after_swap: (elt, detail) => {
+            const ctx = detail ? (detail.ctx || detail) : null;
+            const vp = ctx?._hxRouterViewport || (elt?.hasAttribute?.('hx-viewport') ? elt : null);
+
             removeRoutingIndicators();
             updateActiveLinks();
             restoreScrollContainers();
+            handleScrollResetAndHash(vp);
+
+            dispatchRouterEvent('hx-router:navigated', {
+                elt: elt,
+                viewport: vp,
+                url: window.location.href
+            });
         },
 
         htmx_finally_request: () => {
@@ -226,57 +409,60 @@
         }
     };
 
-    // Register for htmx 4.x as well as backward-compatibility fallback for 1.x / 2.x
-    if (typeof window !== 'undefined' && window.htmx) {
+    // Public API
+    const publicAPI = {
+        get config() {
+            return getCfg();
+        },
+        updateActiveLinks,
+        saveScrollContainers,
+        restoreScrollContainers
+    };
+
+    if (typeof window !== 'undefined') {
+        window.htmx = window.htmx || {};
+        window.htmx.router = publicAPI;
+
+        // Register for htmx 4.x as well as backward-compatibility fallback for 1.x / 2.x
         if (typeof window.htmx.registerExtension === 'function') {
             window.htmx.registerExtension('hx-router', routerExtension);
             window.htmx.registerExtension('router', routerExtension);
         }
         if (typeof window.htmx.defineExtension === 'function') {
-            window.htmx.defineExtension('hx-router', {
-                init: routerExtension.init,
-                onEvent: function (name, evt) {
-                    const elt = evt.target;
-                    const detail = evt.detail || {};
-                    if (name === 'htmx:afterInit' || name === 'htmx:afterProcessNode') {
-                        routerExtension.htmx_after_init(elt);
-                    } else if (name === 'htmx:beforeRequest') {
-                        routerExtension.htmx_before_request(elt, detail);
-                    } else if (name === 'htmx:afterRequest') {
-                        routerExtension.htmx_after_request(elt, detail);
-                    } else if (name === 'htmx:afterSwap') {
-                        routerExtension.htmx_after_swap(elt, detail);
-                    } else if (name === 'htmx:historyPush') {
-                        routerExtension.htmx_after_history_push();
-                    } else if (name === 'htmx:historyRestore') {
-                        updateActiveLinks();
-                        setTimeout(restoreScrollContainers, 0);
+            const defineFn = (name) => {
+                window.htmx.defineExtension(name, {
+                    init: routerExtension.init,
+                    onEvent: function (name, evt) {
+                        const elt = evt.target;
+                        const detail = evt.detail || {};
+                        if (name === 'htmx:afterInit' || name === 'htmx:afterProcessNode') {
+                            routerExtension.htmx_after_init(elt);
+                        } else if (name === 'htmx:beforeRequest') {
+                            routerExtension.htmx_before_request(elt, detail);
+                        } else if (name === 'htmx:beforeSwap') {
+                            routerExtension.htmx_before_swap(elt, detail);
+                        } else if (name === 'htmx:afterRequest') {
+                            routerExtension.htmx_after_request(elt, detail);
+                        } else if (name === 'htmx:afterSwap') {
+                            routerExtension.htmx_after_swap(elt, detail);
+                        } else if (name === 'htmx:historyPush') {
+                            routerExtension.htmx_after_history_push();
+                        } else if (name === 'htmx:historyRestore') {
+                            updateActiveLinks();
+                            setTimeout(() => {
+                                restoreScrollContainers();
+                                dispatchRouterEvent('hx-router:navigated', {
+                                    type: 'historyRestore',
+                                    url: window.location.href
+                                });
+                            }, 0);
+                        }
+                        return true;
                     }
-                    return true;
-                }
-            });
-            window.htmx.defineExtension('router', {
-                init: routerExtension.init,
-                onEvent: function (name, evt) {
-                    const elt = evt.target;
-                    const detail = evt.detail || {};
-                    if (name === 'htmx:afterInit' || name === 'htmx:afterProcessNode') {
-                        routerExtension.htmx_after_init(elt);
-                    } else if (name === 'htmx:beforeRequest') {
-                        routerExtension.htmx_before_request(elt, detail);
-                    } else if (name === 'htmx:afterRequest') {
-                        routerExtension.htmx_after_request(elt, detail);
-                    } else if (name === 'htmx:afterSwap') {
-                        routerExtension.htmx_after_swap(elt, detail);
-                    } else if (name === 'htmx:historyPush') {
-                        routerExtension.htmx_after_history_push();
-                    } else if (name === 'htmx:historyRestore') {
-                        updateActiveLinks();
-                        setTimeout(restoreScrollContainers, 0);
-                    }
-                    return true;
-                }
-            });
+                });
+            };
+            defineFn('hx-router');
+            defineFn('router');
         }
     }
 })();

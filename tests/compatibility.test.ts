@@ -181,4 +181,45 @@ describe.each(HTMX_VERSIONS)("htmx v%s compatibility", (version) => {
         expect(link.classList.contains("is-selected")).toBe(true);
         expect(link.getAttribute("aria-current")).toBe("location");
     });
+
+    it("automatically extracts viewport content when server sends full HTML document", async () => {
+        const fullPageHtml = `<!DOCTYPE html>
+        <html>
+            <head><title>Full Page Title</title></head>
+            <body>
+                <nav><a href="/other">Other</a></nav>
+                <div hx-viewport id="main-viewport">
+                    <h2>Extracted Inner Content</h2>
+                </div>
+                <footer>Footer</footer>
+            </body>
+        </html>`;
+
+        const html = `<!DOCTYPE html>
+        <html>
+        <head><title>Initial</title></head>
+        <body>
+            <div hx-ext="hx-router">
+                <a id="nav-btn" href="/page" hx-get="/page" hx-route>Go</a>
+                <div hx-viewport id="main-viewport">Initial Viewport</div>
+            </div>
+        </body>
+        </html>`;
+
+        const env = setupHtmxTestEnvironment({
+            version,
+            html,
+            mockResponseHtml: fullPageHtml
+        });
+
+        const btn = env.document.getElementById("nav-btn")!;
+        const viewport = env.document.getElementById("main-viewport")!;
+
+        btn.click();
+        await new Promise((r) => setTimeout(r, 60));
+
+        expect(viewport.innerHTML).toContain("Extracted Inner Content");
+        expect(viewport.innerHTML).not.toContain("<footer>Footer</footer>");
+        expect(env.document.title).toBe("Full Page Title");
+    });
 });

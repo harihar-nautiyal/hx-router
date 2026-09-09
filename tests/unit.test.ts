@@ -152,5 +152,134 @@ describe("hx-router unit tests", () => {
         router.htmx_finally_request();
         expect(vp.classList.contains("hx-routing")).toBe(false);
     });
+
+    it("respects hx-route-match='exact' and custom hx-active-class", () => {
+        const registered: Record<string, any> = {};
+        (window as any).htmx = {
+            registerExtension: (name: string, ext: any) => {
+                registered[name] = ext;
+            }
+        };
+
+        document.body.innerHTML = `
+            <nav hx-nav>
+                <a id="link-parent" href="/app" hx-route-match="exact" hx-active-class="exact-active">Parent</a>
+                <a id="link-curr" href="/app/dashboard" hx-active-class="custom-active text-bold">Dashboard</a>
+            </nav>
+        `;
+
+        const runScript = new Function("window", "document", routerScript);
+        runScript(window, document);
+
+        const router = registered["hx-router"];
+        router.htmx_after_init();
+
+        const parent = document.getElementById("link-parent")!;
+        const curr = document.getElementById("link-curr")!;
+
+        // /app should NOT match /app/dashboard because mode='exact'
+        expect(parent.classList.contains("exact-active")).toBe(false);
+        expect(parent.classList.contains("active")).toBe(false);
+
+        // /app/dashboard should receive custom classes
+        expect(curr.classList.contains("custom-active")).toBe(true);
+        expect(curr.classList.contains("text-bold")).toBe(true);
+        expect(curr.getAttribute("aria-current")).toBe("page");
+    });
+
+    it("extracts viewport fragment from full HTML response", () => {
+        const registered: Record<string, any> = {};
+        (window as any).htmx = {
+            registerExtension: (name: string, ext: any) => {
+                registered[name] = ext;
+            }
+        };
+
+        document.body.innerHTML = `
+            <div hx-viewport id="main-outlet">Old Inner</div>
+        `;
+
+        const runScript = new Function("window", "document", routerScript);
+        runScript(window, document);
+
+        const router = registered["hx-router"];
+        const vp = document.getElementById("main-outlet")!;
+
+        const fullHtml = `<!DOCTYPE html><html><head><title>Full Doc Page</title></head><body><header>Nav</header><main hx-viewport><h1>Fragment Content</h1></main><footer>Foot</footer></body></html>`;
+
+        const detail: any = {
+            target: vp,
+            serverResponse: fullHtml
+        };
+        const ctx: any = { _hxRouterActive: true, _hxRouterViewport: vp };
+
+        router.htmx_before_swap(vp, Object.assign(detail, { ctx }));
+
+        expect(detail.serverResponse).toBe("<h1>Fragment Content</h1>");
+        expect(document.title).toBe("Full Doc Page");
+    });
+
+    it("announces title to screen readers via #hx-router-announcer", () => {
+        const registered: Record<string, any> = {};
+        (window as any).htmx = {
+            registerExtension: (name: string, ext: any) => {
+                registered[name] = ext;
+            }
+        };
+
+        const runScript = new Function("window", "document", routerScript);
+        runScript(window, document);
+
+        const router = registered["hx-router"];
+        router.htmx_after_request(document.body, { ctx: { text: "<title>Accessible Page Title</title>" } });
+
+        const announcer = document.getElementById("hx-router-announcer");
+        expect(announcer).not.toBeNull();
+        expect(announcer?.getAttribute("aria-live")).toBe("polite");
+        expect(announcer?.textContent).toBe("Accessible Page Title");
+    });
+
+    it("dispatches semantic hx-router:navigating and hx-router:navigated events", () => {
+        const registered: Record<string, any> = {};
+        (window as any).htmx = {
+            registerExtension: (name: string, ext: any) => {
+                registered[name] = ext;
+            }
+        };
+
+        document.body.innerHTML = `
+            <a id="nav-btn" href="/new-page" hx-route>Go</a>
+            <div hx-viewport id="vp"></div>
+        `;
+
+        const runScript = new Function("window", "document", routerScript);
+        runScript(window, document);
+
+        const router = registered["hx-router"];
+        const btn = document.getElementById("nav-btn")!;
+        const vp = document.getElementById("vp")!;
+
+        let navigatingDetail: any = null;
+        let navigatedDetail: any = null;
+
+        document.addEventListener("hx-router:navigating", ((e: CustomEvent) => {
+            navigatingDetail = e.detail;
+        }) as EventListener);
+
+        document.addEventListener("hx-router:navigated", ((e: CustomEvent) => {
+            navigatedDetail = e.detail;
+        }) as EventListener);
+
+        const ctx: any = { request: { method: "GET" } };
+        router.htmx_before_request(btn, { ctx });
+
+        expect(navigatingDetail).not.toBeNull();
+        expect(navigatingDetail.to).toBe("/new-page");
+        expect(navigatingDetail.viewport).toBe(vp);
+
+        router.htmx_after_swap(btn, { ctx });
+        expect(navigatedDetail).not.toBeNull();
+        expect(navigatedDetail.viewport).toBe(vp);
+    });
 });
 

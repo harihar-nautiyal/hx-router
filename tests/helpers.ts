@@ -25,6 +25,7 @@ export function setupHtmxTestEnvironment(options: SetupEnvironmentOptions) {
     });
 
     const win = dom.window as any;
+    win.scrollTo = () => {};
     win.document.adoptedStyleSheets = [];
     win.CSSStyleSheet = class CSSStyleSheet {
         replaceSync() {}

@@ -1,8 +1,17 @@
 {
   "name": "hx-ext-router",
-  "version": "1.0.0",
-  "description": "SPA-like routing and navigation orchestration extension for htmx 4",
-  "main": "dist/hx-router.js",
+  "version": "1.1.0",
+  "description": "SPA-like routing and navigation orchestration extension for htmx 4, 2, and 1",
+  "main": "dist/hx-router.esm.js",
+  "module": "dist/hx-router.esm.js",
+  "types": "dist/hx-router.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/hx-router.d.ts",
+      "import": "./dist/hx-router.esm.js",
+      "default": "./dist/hx-router.js"
+    }
+  },
   "unpkg": "dist/hx-router.min.js",
   "jsdelivr": "dist/hx-router.min.js",
   "files": [
