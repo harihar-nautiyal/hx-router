@@ -95,11 +95,42 @@ Define a layout outlet with `hx-viewport`. Any boosted link (`hx-boost="true"`) 
 </dialog>
 ```
 
-### 3. Full-Page Fragment Fallback
+### 3. Full-Page Fragment Fallback (`autoExtractFragment`)
 
-If your backend renders full HTML documents (e.g. including `<head>`, `<nav>`, `<footer>`), `hx-router` inspects the response and automatically extracts the matching `[hx-viewport]` content. You can write your server routes as ordinary complete web pages without custom partial templates!
+By default (`autoExtractFragment: true`), if your backend responds with a full HTML document (including `<!DOCTYPE html>`, `<head>`, `<nav>`, `<footer>`), `hx-router` automatically parses the response, extracts only the matching `[hx-viewport]` content, and updates `document.title`. This lets you write standard multi-page templates on the server without having to maintain separate partial endpoints or manual `hx-select` attributes.
 
-### 4. Lifecycle Events
+If you prefer to disable this behavior and let htmx swap the raw response directly, set:
+```javascript
+htmx.config.router = {
+  autoExtractFragment: false
+};
+```
+
+### 4. Active Route Matching & Edge Cases
+
+`hx-router` synchronizes active states (`activeClass` and `aria-current="page"`) on route changes. Matching behavior handles common edge cases predictably:
+
+- **Segment Boundary Safety**: Strict path segment matching prevents false positives. For example, a link to `/projects` will **not** match `/projects-archive`.
+- **Parent vs. Child Paths (`/projects` vs `/projects/123`)**:
+  - In default `prefix` mode: `/projects/123` activates both `<a href="/projects/123">` (exact match, receives `aria-current="page"`) and `<a href="/projects">` (parent subpath match, receives `activeClass`).
+  - To restrict a link to match *only* when the URL is an exact match, set `hx-route-match="exact"` on the anchor or parent `<nav>` container.
+- **Root Path (`/`)**: Root links (`href="/"`) are guarded against prefix greediness and only match when the current path is literally `/`.
+- **Trailing Slashes**: Automatically handled by segment boundary matching (`/projects/` and `/projects` match symmetrically).
+- **Query Strings (`?query=...`)**:
+  - If a navigation link does **not** specify query parameters (e.g. `href="/projects"`), query strings in the browser URL (e.g. `/projects?sort=date&page=2`) are **ignored**, keeping the route link active.
+  - If a navigation link **explicitly defines query parameters** (e.g. `href="/projects?tab=archived"`), `hx-router` verifies that those specific parameters match the current browser URL query before activating the link.
+- **Hash Fragments (`#hash`)**: Anchor hashes are stripped during route path comparison and used exclusively for scroll targeting.
+
+### 5. Swapping & Morphing (`morph: true`)
+
+`hx-router` defaults to morphing viewport contents (`morph: true`, which sets `swapStyle = 'innerMorph'`) to eliminate layout flicker, preserve input focus, and retain scroll positions of child elements.
+
+> **Note on Idiomorph Dependency**:
+> - In **htmx 4.x**, morphing is natively supported out of the box via built-in morphing algorithms.
+> - In **htmx 1.x / 2.x**, `innerMorph` relies on the official [`idiomorph`](https://github.com/bigskysoftware/idiomorph) extension (`hx-ext="idiomorph"`). `hx-router` **does not bundle** Idiomorph into its file size to keep bundle overhead under 2 KB.
+> - If you are using htmx 1.x / 2.x and do not load Idiomorph, or prefer standard inner HTML replacement, set `morph: false` in your configuration (or specify `hx-swap="innerHTML"` on the link).
+
+### 6. Lifecycle Events
 
 ```javascript
 // Intercept or cancel navigation

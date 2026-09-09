@@ -31,8 +31,8 @@ Include `hx-router.js` (or import the ESM module) after `htmx.js`:
 ### 1. `[hx-viewport]` (Layout Outlet)
 Designates the primary swap container for SPA transitions.
 - Any navigation link (`a[href]` with `hx-boost="true"` or `hx-get`) omitting an explicit `hx-target` routes directly into `[hx-viewport]`.
-- Defaults to `innerMorph` swapping to eliminate layout flicker and preserve input state.
-- **Full-Page Fragment Extraction**: If the server returns a complete HTML page with `<head>`, `<nav>`, and `<main hx-viewport>`, `hx-router` automatically extracts the matching viewport content and keeps `document.title` synced without requiring separate partial endpoints.
+- **Morphing (`morph: true`)**: Sets `swapStyle = 'innerMorph'`. htmx 4 supports this natively; htmx 1.x/2.x requires the external `idiomorph` extension or setting `morph: false` (to use standard innerHTML).
+- **Full-Page Fragment Extraction (`autoExtractFragment: true`)**: If the server returns a complete HTML page with `<head>`, `<nav>`, and `<main hx-viewport>`, `hx-router` automatically extracts the matching viewport content and keeps `document.title` synced without requiring separate partial endpoints. Can be disabled via `autoExtractFragment: false`.
 - **Safety**: Forms and mutating HTTP requests (`POST`, `PUT`, `DELETE`, `PATCH`) are never hijacked.
 
 ### 2. Named Viewports (`hx-route-to="name"`)
@@ -52,7 +52,9 @@ Routes specific links into secondary outlets (e.g., modals, slide-out drawers, d
 Automatically synchronizes the active CSS class and `aria-current="page"` on route navigation, browser back/forward buttons, and initial load.
 
 - Put `hx-nav` on `<nav>` containers or `hx-route-link` on individual anchor elements.
-- Strict segment/slash boundary matching.
+- **Strict segment matching**: `/projects` matches `/projects/123`, but does **not** match `/projects-archive`.
+- **Root guard**: `<a href="/">` only matches exact root `/`.
+- **Query string matching**: Browser query parameters (e.g. `?page=2`) are ignored when matching parameterless links (`/projects`). However, if a link specifies query parameters (`/projects?tab=active`), those parameters must match.
 - **`hx-route-match="exact|prefix"`**: Force exact path matching or hierarchical prefix matching.
 - **`hx-active-class="classes..."`**: Customize active classes per link or per nav.
 - Exact matches receive `aria-current="page"`. Parent subpath matches receive the active class.
