@@ -1,0 +1,27 @@
+{
+  "name": "hx-router",
+  "version": "1.0.0",
+  "description": "SPA-like routing and navigation orchestration extension for htmx 4",
+  "main": "src/hx-router.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harihar-nautiyal/hx-router.git"
+  },
+  "keywords": [
+    "htmx",
+    "htmx-extension",
+    "router",
+    "spa",
+    "prefetch",
+    "hypermedia"
+  ],
+  "author": "Harihar Nautiyal",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/harihar-nautiyal/hx-router/issues"
+  },
+  "homepage": "https://github.com/harihar-nautiyal/hx-router#readme"
+}
