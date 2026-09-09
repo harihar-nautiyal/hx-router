@@ -222,4 +222,49 @@ describe.each(HTMX_VERSIONS)("htmx v%s compatibility", (version) => {
         expect(viewport.innerHTML).not.toContain("<footer>Footer</footer>");
         expect(env.document.title).toBe("Full Page Title");
     });
+
+    it("restores scroll position on history popstate", async () => {
+        const html = `<!DOCTYPE html>
+        <html>
+        <head><title>Scroll Test</title></head>
+        <body>
+            <div hx-ext="hx-router">
+                <div hx-viewport id="main-viewport" style="height:200px;overflow:auto;">
+                    <div style="height:1000px;">Scrollable content</div>
+                </div>
+            </div>
+        </body>
+        </html>`;
+
+        let scrolledToX = -1;
+        let scrolledToY = -1;
+
+        const env = setupHtmxTestEnvironment({
+            version,
+            html,
+            url: "https://example.com/feed"
+        });
+
+        env.window.scrollTo = (x: number, y: number) => {
+            scrolledToX = x;
+            scrolledToY = y;
+        };
+
+        const viewport = env.document.getElementById("main-viewport")!;
+        viewport.scrollTop = 320;
+
+        // Dispatch popstate with stored scroll state
+        const popstateEvt = new env.window.Event("popstate");
+        (popstateEvt as any).state = {
+            __hxRouterScroll: { winX: 0, winY: 600, vpTop: 320, vpLeft: 0 }
+        };
+
+        viewport.scrollTop = 0;
+        env.window.dispatchEvent(popstateEvt);
+
+        await new Promise((r) => setTimeout(r, 20));
+
+        expect(scrolledToY).toBe(600);
+        expect(viewport.scrollTop).toBe(320);
+    });
 });

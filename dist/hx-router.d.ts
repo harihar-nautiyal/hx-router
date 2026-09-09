@@ -15,8 +15,10 @@ export interface HxRouterConfig {
   syncTitle?: boolean;
   /** Class added to the active viewport container during transitions (default: 'hx-routing') */
   routingClass?: string;
-  /** Automatically reset window/viewport scroll to top on navigation (default: true) */
+  /** Automatically reset window/viewport scroll to top on fresh navigations (default: true) */
   scrollReset?: boolean;
+  /** Automatically save and restore window and viewport scroll positions on back/forward (popstate) navigation (default: true) */
+  historyScrollRestoration?: boolean;
   /** Automatically scroll to targeted hash (#id) element after navigation (default: true) */
   scrollHash?: boolean;
   /** Announce new page title to assistive tech via an aria-live region (default: true) */

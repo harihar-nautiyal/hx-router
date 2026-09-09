@@ -18,6 +18,7 @@
             syncTitle: true,
             routingClass: 'hx-routing',
             scrollReset: true,
+            historyScrollRestoration: true,
             scrollHash: true,
             announceTitle: true,
             autoExtractFragment: true
@@ -25,6 +26,38 @@
     }
 
     const scrollPositions = new Map();
+    const historyScrollMap = new Map();
+    let isHistoryNavigation = false;
+    let pendingHistoryScroll = null;
+
+    function captureCurrentScroll() {
+        if (typeof window === 'undefined') return;
+        const mainVp = document.querySelector('[hx-viewport]');
+        const scrollData = {
+            winX: window.scrollX || window.pageXOffset || 0,
+            winY: window.scrollY || window.pageYOffset || 0,
+            vpTop: mainVp && mainVp.scrollTop !== undefined ? mainVp.scrollTop : 0,
+            vpLeft: mainVp && mainVp.scrollLeft !== undefined ? mainVp.scrollLeft : 0
+        };
+
+        const currentHref = window.location.href;
+        historyScrollMap.set(currentHref, scrollData);
+
+        if (window.history && window.history.state !== undefined && typeof window.history.replaceState === 'function') {
+            try {
+                const state = Object.assign({}, window.history.state || {}, { __hxRouterScroll: scrollData });
+                window.history.replaceState(state, '');
+            } catch (_) {}
+        }
+    }
+
+    function getHistoryScrollForCurrent() {
+        if (typeof window === 'undefined') return null;
+        if (window.history && window.history.state && window.history.state.__hxRouterScroll) {
+            return window.history.state.__hxRouterScroll;
+        }
+        return historyScrollMap.get(window.location.href) || null;
+    }
 
     function getAttr(elt, name) {
         if (!elt) return null;
@@ -168,10 +201,41 @@
         } catch (_) {}
     }
 
-    function handleScrollResetAndHash(targetEl) {
-        const cfg = getCfg();
-        const hash = window.location.hash ? window.location.hash.slice(1) : null;
+    let historyNavigationTimer = null;
 
+    function handleScrollAfterNavigation(targetEl) {
+        const cfg = getCfg();
+
+        if (isHistoryNavigation && cfg.historyScrollRestoration) {
+            const saved = pendingHistoryScroll || getHistoryScrollForCurrent();
+            isHistoryNavigation = false;
+            pendingHistoryScroll = null;
+            if (historyNavigationTimer) {
+                clearTimeout(historyNavigationTimer);
+                historyNavigationTimer = null;
+            }
+
+            if (saved) {
+                if (typeof window.scrollTo === 'function') {
+                    window.scrollTo(saved.winX, saved.winY);
+                }
+                const mainVp = targetEl || document.querySelector('[hx-viewport]');
+                if (mainVp && saved.vpTop !== undefined) {
+                    mainVp.scrollTop = saved.vpTop;
+                    mainVp.scrollLeft = saved.vpLeft;
+                }
+                return;
+            }
+        }
+
+        isHistoryNavigation = false;
+        pendingHistoryScroll = null;
+        if (historyNavigationTimer) {
+            clearTimeout(historyNavigationTimer);
+            historyNavigationTimer = null;
+        }
+
+        const hash = window.location.hash ? window.location.hash.slice(1) : null;
         if (cfg.scrollHash && hash) {
             const hashEl = document.getElementById(hash);
             if (hashEl) {
@@ -277,26 +341,44 @@
     const routerExtension = {
         init: (internalAPI) => {
             api = internalAPI;
-            window.addEventListener('popstate', () => {
-                updateActiveLinks();
-                setTimeout(() => {
-                    restoreScrollContainers();
-                    dispatchRouterEvent('hx-router:navigated', {
-                        type: 'popstate',
-                        url: window.location.href
-                    });
-                }, 0);
-            });
+            if (typeof window !== 'undefined') {
+                if ('scrollRestoration' in window.history && getCfg().historyScrollRestoration) {
+                    try {
+                        window.history.scrollRestoration = 'manual';
+                    } catch (_) {}
+                }
+
+                window.addEventListener('scroll', () => {
+                    captureCurrentScroll();
+                }, { passive: true });
+
+                window.addEventListener('popstate', (e) => {
+                    isHistoryNavigation = true;
+                    pendingHistoryScroll = (e && e.state && e.state.__hxRouterScroll) || getHistoryScrollForCurrent();
+                    updateActiveLinks();
+                    if (historyNavigationTimer) clearTimeout(historyNavigationTimer);
+                    historyNavigationTimer = setTimeout(() => {
+                        restoreScrollContainers();
+                        handleScrollAfterNavigation(document.querySelector('[hx-viewport]'));
+                        dispatchRouterEvent('hx-router:navigated', {
+                            type: 'popstate',
+                            url: window.location.href
+                        });
+                    }, 0);
+                });
+            }
         },
 
         htmx_after_init: () => {
             updateActiveLinks();
             restoreScrollContainers();
+            captureCurrentScroll();
         },
 
         htmx_before_request: (elt, detail) => {
             const ctx = detail ? (detail.ctx || detail) : null;
             if (!ctx) return;
+            captureCurrentScroll();
             saveScrollContainers();
 
             const cfg = getCfg();
@@ -387,7 +469,7 @@
             removeRoutingIndicators();
             updateActiveLinks();
             restoreScrollContainers();
-            handleScrollResetAndHash(vp);
+            handleScrollAfterNavigation(vp);
 
             dispatchRouterEvent('hx-router:navigated', {
                 elt: elt,
@@ -448,9 +530,13 @@
                         } else if (name === 'htmx:historyPush') {
                             routerExtension.htmx_after_history_push();
                         } else if (name === 'htmx:historyRestore') {
+                            isHistoryNavigation = true;
+                            pendingHistoryScroll = (evt.detail && evt.detail.state && evt.detail.state.__hxRouterScroll) || getHistoryScrollForCurrent();
                             updateActiveLinks();
-                            setTimeout(() => {
+                            if (historyNavigationTimer) clearTimeout(historyNavigationTimer);
+                            historyNavigationTimer = setTimeout(() => {
                                 restoreScrollContainers();
+                                handleScrollAfterNavigation(document.querySelector('[hx-viewport]'));
                                 dispatchRouterEvent('hx-router:navigated', {
                                     type: 'historyRestore',
                                     url: window.location.href

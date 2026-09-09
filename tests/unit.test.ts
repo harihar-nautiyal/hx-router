@@ -281,5 +281,51 @@ describe("hx-router unit tests", () => {
         expect(navigatedDetail).not.toBeNull();
         expect(navigatedDetail.viewport).toBe(vp);
     });
+
+    it("restores window and viewport scroll positions on back/forward history navigation", () => {
+        const registered: Record<string, any> = {};
+        (window as any).htmx = {
+            registerExtension: (name: string, ext: any) => {
+                registered[name] = ext;
+            }
+        };
+
+        let scrolledToX = -1;
+        let scrolledToY = -1;
+        (window as any).scrollTo = (x: number, y: number) => {
+            scrolledToX = x;
+            scrolledToY = y;
+        };
+
+        document.body.innerHTML = `
+            <div hx-viewport id="main-viewport">Content</div>
+        `;
+
+        const runScript = new Function("window", "document", routerScript);
+        runScript(window, document);
+
+        const router = registered["hx-router"];
+        const vp = document.getElementById("main-viewport")!;
+        vp.scrollTop = 450;
+
+        // Initialize and simulate history navigation
+        router.init();
+
+        const popEvent = new (window as any).Event("popstate");
+        (popEvent as any).state = {
+            __hxRouterScroll: { winX: 0, winY: 780, vpTop: 450, vpLeft: 0 }
+        };
+
+        window.dispatchEvent(popEvent);
+
+        vp.scrollTop = 0;
+        scrolledToY = 0;
+
+        // Simulate after_swap handling the restore
+        router.htmx_after_swap(vp, {});
+
+        expect(scrolledToY).toBe(780);
+        expect(vp.scrollTop).toBe(450);
+    });
 });
 

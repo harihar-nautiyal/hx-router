@@ -13,7 +13,11 @@ An SPA routing, layout outlet, and navigation orchestration extension for **htmx
 - **`[hx-nav]` & `[hx-route-link]` Active Link State Sync**: Automatically toggles the active class and sets `aria-current="page"` on matching routes with strict segment and slash-boundary matching. Supports `hx-route-match="exact|prefix"` and custom per-link classes (`hx-active-class="..."`).
 - **Native View Transitions**: Automatically enables `document.startViewTransition` on viewport route swaps with automatic respect for `prefers-reduced-motion`.
 - **Document Title & Accessibility Sync**: Seamlessly extracts and updates `document.title` and announces route changes to assistive tech via an `aria-live="polite"` region.
-- **Scroll Management**: Resets scroll to top or jumps to hash anchors (`#id`) on navigation while `[hx-preserve-scroll]` preserves positions of persistent elements like sidebars across transitions.
+- **Scroll Management & History Restoration**:
+  - Resets window and viewport scroll to `(0, 0)` on fresh link navigations.
+  - Automatically restores window and viewport scroll coordinates on browser **Back / Forward** (`popstate` / `htmx:historyRestore`), avoiding abrupt jumps to top.
+  - Smoothly jumps to hash anchors (`#id`) when present in URLs.
+  - `[hx-preserve-scroll]` preserves granular sub-element scroll positions (e.g. sidebars, table bodies) across transitions.
 - **Lifecycle Events**: Dispatches semantic `hx-router:navigating` (cancellable) and `hx-router:navigated` events for telemetry or analytics.
 - **Public JavaScript API**: Programmatic utilities via `window.htmx.router` (`updateActiveLinks()`, `restoreScrollContainers()`, etc.).
 - **Dual Compatibility & ESM**: First-class ESM bundle (`dist/hx-router.esm.js`), TypeScript declarations (`.d.ts`), and support for htmx 4.x, 2.x, and 1.x.
@@ -124,7 +128,8 @@ htmx.config.router = {
   viewTransitions: true,         // Enable native View Transitions (honors prefers-reduced-motion)
   syncTitle: true,               // Extract <title> from response and update document.title
   routingClass: 'hx-routing',    // Class added to viewport during navigation
-  scrollReset: true,             // Reset scroll to top on page navigation
+  scrollReset: true,             // Reset scroll to top on fresh page navigation
+  historyScrollRestoration: true,// Restore window & viewport scroll on back/forward buttons
   scrollHash: true,              // Scroll to #hash element if present in URL
   announceTitle: true,           // Screen reader aria-live announcements on route changes
   autoExtractFragment: true      // Extract [hx-viewport] if server sends full HTML

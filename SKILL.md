@@ -63,8 +63,9 @@ If supported by the browser (`document.startViewTransition`) and reduced motion 
 ### 5. Document Title Synchronization & a11y Announcer
 When `syncTitle: true` (default), `hx-router` parses `<title>` tags from server partials or pages, updates `document.title`, and updates an offscreen `aria-live="polite"` region for assistive technology.
 
-### 6. Scroll Management & Preservation
-- Automatically resets scroll to top on navigation when `scrollReset: true`.
+### 6. Scroll Management & History Restoration
+- Automatically resets scroll to top on fresh navigations when `scrollReset: true`.
+- Automatically restores window & viewport scroll position on browser back/forward buttons (`popstate`) when `historyScrollRestoration: true`.
 - Automatically jumps to anchor targets (`#heading`) when `scrollHash: true`.
 - Use `[hx-preserve-scroll]` to preserve `scrollTop` and `scrollLeft` for sub-containers (like sidebars).
 
@@ -96,6 +97,7 @@ htmx.config.router = {
   syncTitle: true,               // Extract and update document.title (default: true)
   routingClass: 'hx-routing',    // Class added to viewport during navigation
   scrollReset: true,             // Reset window/viewport scroll to top on navigation
+  historyScrollRestoration: true,// Restore window & viewport scroll on back/forward
   scrollHash: true,              // Scroll to #hash element if present
   announceTitle: true,           // Screen reader aria-live announcements on route change
   autoExtractFragment: true      // Extract [hx-viewport] if server sends full HTML
