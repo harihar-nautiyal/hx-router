@@ -29,11 +29,11 @@ An SPA routing, layout outlet, and navigation orchestration extension for **htmx
 ### ESM / Bundler (Vite, Webpack, esbuild)
 
 ```bash
-npm install hx-ext-router
+npm install hx-router
 ```
 
 ```javascript
-import 'hx-ext-router';
+import 'hx-router';
 ```
 
 The `package.json` entrypoint defaults to the modern ESM build with full TypeScript definitions.
@@ -42,11 +42,11 @@ The `package.json` entrypoint defaults to the modern ESM build with full TypeScr
 
 ```html
 <!-- CDN Script Tag (IIFE) -->
-<script src="https://cdn.jsdelivr.net/npm/hx-ext-router@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/hx-router@latest"></script>
 
 <!-- Or via ESM import in modern browsers -->
 <script type="module">
-  import 'https://cdn.jsdelivr.net/npm/hx-ext-router@latest/dist/hx-router.esm.js';
+  import 'https://cdn.jsdelivr.net/npm/hx-router@latest/dist/hx-router.esm.js';
 </script>
 ```
 

@@ -1,5 +1,5 @@
 /**
- * TypeScript declarations for hx-router (hx-ext-router)
+ * TypeScript declarations for hx-router
  */
 
 export interface HxRouterConfig {

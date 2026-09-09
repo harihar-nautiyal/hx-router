@@ -1,5 +1,5 @@
 {
-  "name": "hx-ext-router",
+  "name": "hx-router",
   "version": "1.2.0",
   "description": "SPA-like routing and navigation orchestration extension for htmx 4, 2, and 1",
   "main": "dist/hx-router.esm.js",
