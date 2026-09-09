@@ -20,19 +20,35 @@ An SPA routing, layout outlet, and navigation orchestration extension for **htmx
 
 ## Installation
 
-Include `htmx.js` and `hx-router.js` in your HTML. To enable link preloading on hover or mousedown, pair it with the official `preload` extension:
+### CDN
+
+You can directly load `hx-router` via jsDelivr:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/hx-ext-router@latest"></script>
+```
+
+### Script Tag Example
+
+Include `htmx.js` and `hx-ext-router` in your HTML. To enable link preloading on hover or mousedown, pair it with the official `preload` extension:
 
 ```html
 <head>
   <!-- Core htmx -->
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@4"></script>
 
-  <!-- hx-router -->
-  <script src="/path/to/hx-router.js"></script>
+  <!-- hx-router (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/hx-ext-router@latest"></script>
 
   <!-- (Optional) Official htmx Preload Extension -->
   <script src="https://cdn.jsdelivr.net/npm/htmx-ext-preload@2.1.2"></script>
 </head>
+```
+
+### npm
+
+```bash
+npm install hx-ext-router
 ```
 
 In htmx 4.x, extensions register automatically. In htmx 1.x / 2.x, enable via `hx-ext="hx-router, preload"`.
