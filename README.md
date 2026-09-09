@@ -1,55 +1,81 @@
 # hx-router
 
-An SPA routing and navigation extension for **htmx 4.x**.
+An SPA routing, layout outlet, and navigation orchestration extension for **htmx** (compatible with htmx 4.x, 2.x, and 1.x).
 
-`hx-router` brings SPA quality-of-life primitives into htmx applications while keeping hypermedia-first architecture intact.
+`hx-router` brings SPA quality-of-life primitives to htmx applications while preserving hypermedia-first architecture. It handles layout outlets, active link state reflection, scroll preservation, view transitions, and title syncing. For resource prefetching, it composes seamlessly with the official [`preload`](https://htmx.org/extensions/preload/) extension.
+
+---
 
 ## Features
 
-- **`[hx-viewport]` Automatic Layout Routing**: Target viewport outlets without manually adding `hx-target` to every single navigation link. Defaults to `innerMorph` swapping to keep UI states flicker-free.
-- **`[hx-nav]` & `[hx-route-link]` Active Link State Sync**: Automatically toggles `active` class and sets `aria-current="page"` on matching routes across pushState, replaceState, and browser popstate navigation.
-- **`hx-prefetch="viewport"` & `[hx-viewport-prefetch]`**: Preloads linked HTML fragments using `IntersectionObserver` when elements enter the screen, respecting `navigator.connection.saveData`.
-- **`[hx-preserve-scroll]`**: Maintains scroll positions for sub-containers (drawers, sidebars, panes) across route transitions.
-- **In-Memory SWR (Stale-While-Revalidate) Cache**: Resolves visited GET routes immediately from memory.
+- **`[hx-viewport]` & Named Outlets**: Automatically targets default and nested viewports (e.g. `<dialog hx-viewport="modal">` via `hx-route-to="modal"`) without requiring manual `hx-target` on every navigation link. Mutating requests (`POST`, `PUT`, `DELETE`) and non-navigation triggers are safeguarded from viewport hijacking.
+- **`[hx-nav]` & `[hx-route-link]` Active Link State Sync**: Automatically toggles the active class and sets `aria-current="page"` on matching routes with strict segment and slash-boundary matching.
+- **Native View Transitions**: Automatically enables `document.startViewTransition` on viewport route swaps where supported.
+- **Document Title Syncing**: Seamlessly extracts and updates `document.title` from swapped HTML responses.
+- **`[hx-preserve-scroll]`**: Preserves scroll positions across route transitions and browser history navigation for sidebars, tables, and panes.
+- **Loading State Indicator**: Applies `.hx-routing` to the active viewport container during transitions.
+- **Dual Compatibility**: First-class support for htmx 4.x lifecycle hooks with fallback mapping for htmx 1.x / 2.x `htmx.defineExtension`.
 
 ---
 
 ## Installation
 
-Include `htmx.js` and `hx-router.js` in your HTML:
+Include `htmx.js` and `hx-router.js` in your HTML. To enable link preloading on hover or mousedown, pair it with the official `preload` extension:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/htmx.org@4"></script>
-<script src="/path/to/hx-router.js"></script>
+<head>
+  <!-- Core htmx -->
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@4"></script>
+
+  <!-- hx-router -->
+  <script src="/path/to/hx-router.js"></script>
+
+  <!-- (Optional) Official htmx Preload Extension -->
+  <script src="https://cdn.jsdelivr.net/npm/htmx-ext-preload@2.1.2"></script>
+</head>
 ```
 
-In htmx 4.x, loading the script registers the extension automatically.
+In htmx 4.x, extensions register automatically. In htmx 1.x / 2.x, enable via `hx-ext="hx-router, preload"`.
 
 ---
 
 ## Usage
 
-### 1. Layout & Viewport Navigation
+### 1. Viewport Routing & Active Links
 
-Define a container with `hx-viewport`. Any boosted link (`hx-boost="true"`) or `hx-get` without an explicit `hx-target` will automatically route to the viewport:
+Define a layout outlet with `hx-viewport`. Any boosted link (`hx-boost="true"`) or `hx-get` link without an explicit `hx-target` routes directly to the viewport using smooth morphing:
 
 ```html
-<!-- Navigation bar with active link tracking and visibility-based prefetching -->
-<nav hx-nav hx-viewport-prefetch>
-  <a href="/dashboard" hx-boost="true">Dashboard</a>
-  <a href="/projects" hx-boost="true">Projects</a>
-  <a href="/settings" hx-boost="true">Settings</a>
-</nav>
+<body hx-ext="hx-router, preload">
+  <!-- Navigation bar with active link sync and hover prefetching -->
+  <nav hx-nav preload="mouseover">
+    <a href="/dashboard" hx-boost="true">Dashboard</a>
+    <a href="/projects" hx-boost="true">Projects</a>
+    <a href="/settings" hx-boost="true">Settings</a>
+  </nav>
 
-<!-- Persistent scrollable panel -->
-<aside hx-preserve-scroll="panel">
-  ...
-</aside>
+  <!-- Persistent scrollable sidebar -->
+  <aside hx-preserve-scroll="sidebar">
+    ...
+  </aside>
 
-<!-- Active Viewport Outlet -->
-<main hx-viewport>
-  <!-- Content swaps here automatically -->
-</main>
+  <!-- Main Viewport Outlet -->
+  <main hx-viewport>
+    <!-- Content swaps here automatically -->
+  </main>
+</body>
+```
+
+### 2. Named Outlets (Modals / Drawers)
+
+```html
+<!-- Routes to the modal viewport instead of the default main viewport -->
+<a href="/users/create" hx-route-to="modal" hx-boost="true">Create User</a>
+
+<!-- Modal Dialog Viewport -->
+<dialog hx-viewport="modal">
+  <!-- Swapped here -->
+</dialog>
 ```
 
 ---
@@ -62,12 +88,18 @@ Options can be customized via `htmx.config.router`:
 htmx.config.router = {
   activeClass: 'active',         // Class added to matched route links
   ariaCurrent: 'page',           // aria-current value for exact route matches
-  prefetchObserver: true,        // Enable IntersectionObserver prefetching
-  prefetchThreshold: 0.1,        // Viewport visibility threshold to trigger prefetch
-  cacheTTL: 60000,               // SWR cache lifetime in ms (default: 60s)
-  morph: true                    // Use innerMorph for viewport swapping
+  morph: true,                   // Use innerMorph for viewport swapping
+  viewTransitions: true,         // Enable native View Transitions when supported
+  syncTitle: true,               // Extract <title> from response and update document.title
+  routingClass: 'hx-routing'     // Class added to viewport during navigation
 };
 ```
+
+---
+
+## Architecture & Composition
+
+Following the hypermedia and Unix philosophy of *"do one thing well"*, `hx-router` delegates preloading to the dedicated [`preload`](https://htmx.org/extensions/preload/) extension. This avoids redundant network caches, memory leaks, and complex IntersectionObserver teardown while ensuring compatibility with standard browser HTTP caching.
 
 ---
 
