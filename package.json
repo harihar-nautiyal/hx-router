@@ -2,8 +2,18 @@
   "name": "hx-router",
   "version": "1.0.0",
   "description": "SPA-like routing and navigation orchestration extension for htmx 4",
-  "main": "src/hx-router.js",
+  "main": "dist/hx-router.js",
+  "unpkg": "dist/hx-router.min.js",
+  "jsdelivr": "dist/hx-router.min.js",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "SKILL.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "build": "bun run build.ts",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "repository": {
